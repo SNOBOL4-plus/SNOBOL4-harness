@@ -33,27 +33,39 @@
 
 (def engines
   "Registry of known engines and their binary paths.
-   Add new engines here — no other code changes needed."
+   Roles:
+     :oracle  — ground truth (CSNOBOL4, SPITBOL, SNOBOL5)
+     :target  — engine under test (JVM, dotnet)
+   Crosscheck targets: :jvm and :dotnet only.
+   :tiny excluded until Sprint 20 T_CAPTURE blocker resolved."
   {:csnobol4 {:bin  "/usr/local/bin/snobol4"
               :args ["-f" "-P256k" "-"]
-              :type :subprocess}
+              :type :subprocess
+              :role :oracle}
    :spitbol  {:bin  "/usr/local/bin/spitbol"
               :args ["-b" "-"]
-              :type :subprocess}
+              :type :subprocess
+              :role :oracle}
    :snobol5  {:bin  "/usr/local/bin/snobol5"
               :args ["-"]
-              :type :subprocess}
+              :type :subprocess
+              :role :oracle}
+   :jvm      {:type :in-process
+              :role :target}
    :dotnet   {:bin  "dotnet"
               :args ["run" "--project" "/home/claude/SNOBOL4-dotnet/Snobol4"]
-              :type :subprocess}
-   :tiny     {:bin  "/home/claude/SNOBOL4-tiny/src/runtime/snobol4/beautiful"
-              :args []
-              :type :subprocess}
-   :jvm      {:type :in-process}})
+              :type :subprocess
+              :role :target}
+   ;; :tiny — not yet a crosscheck target (Sprint 20 T_CAPTURE blocker)
+   })
 
 (def oracles
-  "The ground-truth oracles, in priority order."
+  "Ground-truth oracles, in priority order."
   [:csnobol4 :spitbol :snobol5])
+
+(def targets
+  "Engines under test. Tiny excluded until Sprint 20 blocker resolved."
+  [:jvm :dotnet])
 
 (def ^:dynamic *timeout-ms* 5000)
 
