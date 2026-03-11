@@ -1,25 +1,27 @@
 (ns SNOBOL4clojure.harness
-  "Sprint 14: SPITBOL/CSNOBOL4/SNOBOL4clojure diff harness.
+  "SNOBOL4-plus test harness — Sprint 14+18C.
 
-   Three oracles:
-     run-spitbol  — SPITBOL v4.0f  (/usr/local/bin/spitbol)
-     run-csnobol4 — CSNOBOL4 2.3.3 (/usr/local/bin/snobol4)
-     run-clojure  — SNOBOL4clojure (this implementation)
+   Unified interface for running SNOBOL4 programs through any oracle or engine.
 
-   Outcome map:
-     {:stdout \"...\"   ; captured stdout, whitespace-normalised
-      :stderr \"...\"   ; captured stderr
-      :exit   0}      ; process exit code (clojure side uses :ok / :error / :timeout)
+   Core function:
+     (run engine src)          — run src, return outcome
+     (run engine src :limit n) — run src, stop at statement n
 
-   Corpus record:
-     {:src        \"...snobol4 source...\"
-      :spitbol    outcome-map
-      :csnobol4   outcome-map
-      :clojure    outcome-map
-      :oracle     :spitbol | :csnobol4 | :both | :disagree
-      :status     :pass | :pass-class | :fail | :timeout | :skip
-      :length     (count src)
-      :depth      nil}   ; filled in by generator
+   Outcome map (uniform across all engines):
+     {:stdout \"...\"     ; captured stdout, whitespace-normalised
+      :stderr \"...\"     ; captured stderr
+      :exit   keyword  ; :ok | :error | :timeout | :step-limit
+      :steps  n        ; &STCOUNT at termination (nil if not available)
+      :vars   {...}}   ; variable snapshot at termination (nil if not available)
+
+   Comparison:
+     (triangulate src)               — run all oracles, return agreement map
+     (crosscheck src engines)        — run oracles + engines, return corpus record
+     (agree? outcome-a outcome-b)    — do two outcomes agree on stdout?
+
+   Corpus:
+     (save-corpus! records)
+     (load-corpus)
   "
   (:require [clojure.java.shell  :as sh]
             [clojure.string      :as str]
@@ -27,16 +29,37 @@
             [SNOBOL4clojure.core :as sno])
   (:import  [java.io StringWriter]))
 
-;; ── Configuration ─────────────────────────────────────────────────────────────
-(def ^:dynamic *spitbol-bin*  "/usr/local/bin/spitbol")
-(def ^:dynamic *csnobol4-bin* "/usr/local/bin/snobol4")
-(def ^:dynamic *timeout-ms*   5000)   ; 5 s wall-clock per run
-(def ^:dynamic *stlimit*      10000)  ; SNOBOL4 step limit injected into every program
+;; ── Engine registry ───────────────────────────────────────────────────────────
 
-;; ── Normalise output ──────────────────────────────────────────────────────────
-(defn- normalise
-  "Trim trailing whitespace from each line; drop trailing blank lines."
-  [s]
+(def engines
+  "Registry of known engines and their binary paths.
+   Add new engines here — no other code changes needed."
+  {:csnobol4 {:bin  "/usr/local/bin/snobol4"
+              :args ["-f" "-P256k" "-"]
+              :type :subprocess}
+   :spitbol  {:bin  "/usr/local/bin/spitbol"
+              :args ["-b" "-"]
+              :type :subprocess}
+   :snobol5  {:bin  "/usr/local/bin/snobol5"
+              :args ["-"]
+              :type :subprocess}
+   :dotnet   {:bin  "dotnet"
+              :args ["run" "--project" "/home/claude/SNOBOL4-dotnet/Snobol4"]
+              :type :subprocess}
+   :tiny     {:bin  "/home/claude/SNOBOL4-tiny/src/runtime/snobol4/beautiful"
+              :args []
+              :type :subprocess}
+   :jvm      {:type :in-process}})
+
+(def oracles
+  "The ground-truth oracles, in priority order."
+  [:csnobol4 :spitbol :snobol5])
+
+(def ^:dynamic *timeout-ms* 5000)
+
+;; ── Helpers ───────────────────────────────────────────────────────────────────
+
+(defn- normalise [s]
   (when s
     (->> (str/split-lines s)
          (map str/trimr)
@@ -45,150 +68,145 @@
          (reverse)
          (str/join "\n"))))
 
-;; ── SPITBOL side ─────────────────────────────────────────────────────────────
-(defn run-spitbol
-  "Run src through SPITBOL. Returns {:stdout :stderr :exit}."
-  [src]
-  (try
-    (let [result (sh/sh *spitbol-bin* "-b" "-"
-                        :in src
-                        :env {"PATH" "/usr/local/bin:/usr/bin:/bin"})]
-      ;; SPITBOL puts error messages in stdout when exit != 0
-      (if (zero? (:exit result))
-        {:stdout (normalise (:out result))
-         :stderr (normalise (:err result))
-         :exit   0}
-        {:stdout ""
-         :stderr (normalise (:out result))
-         :exit   (:exit result)}))
-    (catch Exception e
-      {:stdout "" :stderr (.getMessage e) :exit :crashed})))
+(defn- inject-limit [src n]
+  (str "        &STLIMIT = " n "\n"
+       "        &DUMP = 2\n"
+       src))
 
-;; ── CSNOBOL4 side ────────────────────────────────────────────────────────────
-(defn run-csnobol4
-  "Run src through CSNOBOL4. Returns {:stdout :stderr :exit}."
-  [src]
-  (try
-    (let [result (sh/sh *csnobol4-bin* "-"
-                        :in src
-                        :env {"PATH" "/usr/local/bin:/usr/bin:/bin"})]
-      (if (zero? (:exit result))
-        {:stdout (normalise (:out result))
-         :stderr (normalise (:err result))
-         :exit   0}
-        {:stdout ""
-         :stderr (normalise (str (:out result) (:err result)))
-         :exit   (:exit result)}))
-    (catch Exception e
-      {:stdout "" :stderr (.getMessage e) :exit :crashed})))
+(defn- parse-dump
+  "Extract variable map from &DUMP=2 output.
+   Handles CSNOBOL4 (^L prefix, uppercase) and SPITBOL (lowercase) formats."
+  [raw]
+  (let [lines (str/split-lines (or raw ""))
+        start (first (keep-indexed
+                       #(when (or (str/includes? %2 "\f")
+                                  (re-find #"(?i)dump of" %2)) %1)
+                       lines))]
+    (when start
+      (->> (drop start lines)
+           (keep #(when-let [[_ k v] (re-find #"^([A-Za-z&][A-Za-z0-9_]*)\s*=\s*(.*)" (str/trim %))]
+                    [(str/upper-case k) (str/trim v)]))
+           (into {})))))
 
-;; ── SNOBOL4clojure side ───────────────────────────────────────────────────────
-(defn- reset-runtime!
-  "Clear all compiler + runtime state for a fresh run."
-  []
+(defn- exit-keyword [code]
+  (cond (nil? code)    :error
+        (zero? code)   :ok
+        (= 1 code)     :step-limit   ; CSNOBOL4/SPITBOL exit 1 on &STLIMIT
+        :else          :error))
+
+;; ── JVM in-process runner ─────────────────────────────────────────────────────
+
+(defn- reset-runtime! []
   (env/GLOBALS)
-  (reset! env/STNO  0)
-  (reset! env/<STNO> {})
-  (reset! env/<LABL> {})
-  (reset! env/<CODE> {})
+  (reset! env/STNO    0)
+  (reset! env/<STNO>  {})
+  (reset! env/<LABL>  {})
+  (reset! env/<CODE>  {})
   (reset! env/<CHANNELS> {})
   (reset! env/<OPSYN>    {}))
 
-(defn run-clojure
-  "Run src through SNOBOL4clojure. Returns {:stdout :stderr :exit :thrown}.
-   Uses CODE-memo (Stage 23A) so grammar+emitter run only once per unique src."
-  [src]
+(defn- run-jvm [src limit]
+  (reset-runtime!)
+  (when limit (reset! env/&STLIMIT limit))
   (try
-    (reset-runtime!)
-    (let [stdout-p (promise)
-          f (future
-              (deliver stdout-p
-                (with-out-str
-                  (try
-                    (sno/RUN (sno/CODE-memo src))
-                    (catch clojure.lang.ExceptionInfo e
-                      (when-not (= (get (ex-data e) :snobol/signal) :end)
-                        (throw e)))))))]
-      (if-let [stdout (deref stdout-p *timeout-ms* nil)]
-        {:stdout (normalise stdout) :stderr "" :exit :ok}
-        (do (future-cancel f)
-            {:stdout "" :stderr "timeout" :exit :timeout})))
-    (catch clojure.lang.ExceptionInfo e
-      {:stdout ""
-       :stderr (.getMessage e)
-       :exit   :error
-       :thrown (str (class e) ": " (.getMessage e))})
+    (let [stdout (with-out-str
+                   (try (sno/RUN (sno/CODE src))
+                     (catch clojure.lang.ExceptionInfo e
+                       (when-not (#{:end :step-limit}
+                                  (get (ex-data e) :snobol/signal))
+                         (throw e)))))]
+      {:stdout (normalise stdout)
+       :stderr ""
+       :exit   (if (and limit (> @env/&STCOUNT limit)) :step-limit :ok)
+       :steps  @env/&STCOUNT
+       :vars   (env/snapshot!)})
     (catch Exception e
-      {:stdout ""
-       :stderr (.getMessage e)
-       :exit   :error
-       :thrown (str (class e) ": " (.getMessage e))})))
+      {:stdout "" :stderr (.getMessage e)
+       :exit :error :steps @env/&STCOUNT :vars (env/snapshot!)})
+    (finally
+      (reset! env/&STLIMIT 2147483647))))
 
-;; ── Oracle agreement ─────────────────────────────────────────────────────────
-(defn- oracle-stdout
-  "Return the agreed oracle stdout, or nil if oracles disagree.
-   Also returns which oracle(s) are considered authoritative."
-  [sp cs]
-  (let [sp-ok (zero? (:exit sp))
-        cs-ok (zero? (:exit cs))]
-    (cond
-      (and sp-ok cs-ok (= (:stdout sp) (:stdout cs)))
-      {:stdout (:stdout sp) :oracle :both}
+;; ── Subprocess runner ─────────────────────────────────────────────────────────
 
-      (and sp-ok cs-ok (not= (:stdout sp) (:stdout cs)))
-      {:stdout (:stdout sp) :oracle :disagree}  ; use SPITBOL, flag disagreement
+(defn- run-subprocess [engine-key src limit]
+  (let [{:keys [bin args]} (engines engine-key)
+        src' (if limit (inject-limit src limit) src)]
+    (try
+      (let [r (apply sh/sh bin (concat args [:in src'
+                                             :env {"PATH" "/usr/local/bin:/usr/bin:/bin"}]))]
+        (let [raw    (str (:out r) (:err r))
+              vars   (when limit (parse-dump raw))
+              stdout (->> (str/split-lines (:out r))
+                          (remove #(re-find #"(?i)dump of|^[A-Za-z&]\w*\s*=" %))
+                          (str/join "\n")
+                          normalise)]
+          {:stdout stdout
+           :stderr (normalise (:err r))
+           :exit   (exit-keyword (:exit r))
+           :steps  nil
+           :vars   vars}))
+      (catch Exception e
+        {:stdout "" :stderr (.getMessage e)
+         :exit :error :steps nil :vars nil}))))
 
-      sp-ok  {:stdout (:stdout sp) :oracle :spitbol}
-      cs-ok  {:stdout (:stdout cs) :oracle :csnobol4}
-      :else  {:stdout ""           :oracle :both-error})))
+;; ── Core public API ───────────────────────────────────────────────────────────
 
-;; ── Status classification ─────────────────────────────────────────────────────
-(defn- classify
-  "Compare oracle stdout against clojure outcome; return status keyword."
-  [oracle-out cl]
-  (cond
-    (#{:timeout :step-limit} (:exit cl))  :timeout
-    (= :both-error (:oracle oracle-out)) ; both oracles errored — skip
-    (if (= (:exit cl) :error) :pass-class :skip)
+(defn run
+  "Run src through engine, return uniform outcome map.
+   Options:
+     :limit n  — stop after n statements, capture variable dump"
+  [engine src & {:keys [limit]}]
+  (if (= engine :jvm)
+    (run-jvm  src limit)
+    (run-subprocess engine src limit)))
 
-    (= (:stdout oracle-out) (:stdout cl))
-    :pass
+(defn agree?
+  "Do two outcomes agree on stdout?"
+  [a b]
+  (= (:stdout a) (:stdout b)))
 
-    (and (not= (:oracle oracle-out) :both)
-         (not= (:oracle oracle-out) :spitbol)
-         (not= (:oracle oracle-out) :csnobol4)
-         (= (:exit cl) :error))
-    :pass-class
+(defn triangulate
+  "Run src through all oracles. Returns:
+     {:ground-truth stdout
+      :oracle        :csnobol4 | :spitbol | :snobol5 | :disagree | :all-error
+      :outcomes      {engine-key outcome-map}}"
+  [src]
+  (let [outcomes (into {} (map #(vector % (run % src)) oracles))
+        oks      (filter #(= :ok (:exit (val %))) outcomes)
+        [first-ok & rest-ok] oks
+        agree    (every? #(agree? (val first-ok) (val %)) rest-ok)]
+    {:ground-truth (when first-ok (:stdout (val first-ok)))
+     :oracle       (cond
+                     (empty? oks)              :all-error
+                     (and agree (> (count oks) 1)) :all-agree
+                     agree                     (key first-ok)
+                     :else                     :disagree)
+     :outcomes     outcomes}))
 
-    ;; Both oracle and clojure errored (non-zero exits)
-    (and (= :both-error (:oracle oracle-out)) (= (:exit cl) :error))
-    :pass-class
-
-    :else :fail))
-
-;; ── Main entry point ──────────────────────────────────────────────────────────
-(defn diff-run
-  "Run src through all three sides. Returns a corpus record."
-  ([src] (diff-run src nil))
-  ([src depth]
-   (let [sp     (run-spitbol src)
-         cs     (run-csnobol4 src)
-         cl     (run-clojure src)
-         oracle (oracle-stdout sp cs)
-         status (classify oracle cl)]
-     {:src      src
-      :spitbol  sp
-      :csnobol4 cs
-      :clojure  cl
-      :oracle   (:oracle oracle)
-      :status   status
-      :length   (count src)
-      :depth    depth})))
+(defn crosscheck
+  "Run src through oracles (ground truth) and target engines.
+   Returns corpus record with :status :pass|:fail|:timeout|:skip."
+  [src & {:keys [targets] :or {targets [:jvm]}}]
+  (let [tri      (triangulate src)
+        gt       (:ground-truth tri)
+        t-runs   (into {} (map #(vector % (run % src)) targets))
+        status   (fn [outcome]
+                   (case (:exit outcome)
+                     (:timeout :step-limit) :timeout
+                     :error                 :error
+                     (if (= gt (:stdout outcome)) :pass :fail)))]
+    {:src          src
+     :oracle       (:oracle tri)
+     :ground-truth gt
+     :oracles      (:outcomes tri)
+     :targets      (into {} (map #(vector % {:outcome  (t-runs %)
+                                             :status   (status (t-runs %))}) targets))
+     :status       (if (every? #(= :pass (:status (val %))) (:targets *1))
+                     :pass :fail)}))
 
 ;; ── Corpus I/O ────────────────────────────────────────────────────────────────
-(defn save-corpus!
-  "Append records to resources/golden-corpus.edn (one record per line)."
-  [records]
+
+(defn save-corpus! [records]
   (let [path "resources/golden-corpus.edn"]
     (clojure.java.io/make-parents path)
     (with-open [w (clojure.java.io/writer path :append true)]
@@ -197,56 +215,11 @@
         (.newLine w)))
     (count records)))
 
-(defn load-corpus
-  "Load all records from resources/golden-corpus.edn."
-  []
+(defn load-corpus []
   (let [path "resources/golden-corpus.edn"]
     (when (.exists (clojure.java.io/file path))
       (with-open [r (java.io.PushbackReader.
                       (clojure.java.io/reader path))]
         (loop [acc []]
           (let [form (try (read r false ::eof) (catch Exception _ ::eof))]
-            (if (= form ::eof) acc
-              (recur (conj acc form)))))))))
-
-;; ── Step-probe oracle runners (18C.4) ────────────────────────────────────────
-
-(defn run-csnobol4-to-step
-  "Run src through CSNOBOL4 for exactly n statements by prepending
-   &STLIMIT = n to the program source.  CSNOBOL4 natively honours &STLIMIT.
-   Returns the same {:stdout :stderr :exit} map as run-csnobol4.
-   Used by bisect-divergence for three-oracle step comparison."
-  [src n]
-  (run-csnobol4 (str "        &STLIMIT = " n "\n" src)))
-
-(defn run-spitbol-to-step
-  "Run src through SPITBOL for exactly n statements by prepending
-   &STLIMIT = n to the program source.  SPITBOL honours &STLIMIT.
-   Returns the same {:stdout :stderr :exit} map as run-spitbol."
-  [src n]
-  (run-spitbol (str "        &STLIMIT = " n "\n" src)))
-
-(defn run-clojure-to-step
-  "Run src through SNOBOL4clojure for exactly n statements.
-   Returns the run-to-step map: {:exit :steps :vars :stdout}.
-   Requires test-helpers/run-to-step — call from test context only."
-  [src n]
-  ;; Delegate to test-helpers/run-to-step when available; otherwise
-  ;; inline the logic using the harness-private reset-runtime!.
-  (reset-runtime!)
-  (reset! env/&STLIMIT n)
-  (try
-    (let [stdout (with-out-str
-                   (try (sno/RUN (sno/CODE src))
-                     (catch clojure.lang.ExceptionInfo e
-                       (when-not (#{:end :step-limit}
-                                  (get (ex-data e) :snobol/signal))
-                         (throw e)))))]
-      {:exit    (if (> @env/&STCOUNT n) :step-limit :ok)
-       :steps   @env/&STCOUNT
-       :stdout  (normalise stdout)
-       :vars    (env/snapshot!)})
-    (catch Exception e
-      {:exit :error :thrown (.getMessage e) :vars (env/snapshot!)})
-    (finally
-      (reset! env/&STLIMIT 2147483647))))
+            (if (= form ::eof) acc (recur (conj acc form)))))))))
