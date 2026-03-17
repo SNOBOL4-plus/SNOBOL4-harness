@@ -1,5 +1,7 @@
 # SNOBOL4-harness
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Shared test infrastructure for the SNOBOL4-plus compiler/runtime family.
 
 Serves three compiler/runtime repos:
