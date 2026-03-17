@@ -1,7 +1,7 @@
-# SNOBOL4-harness Layout
+# snobol4harness Layout
 
 ```
-SNOBOL4-harness/
+snobol4harness/
 │
 ├── probe/                      # Probe testing — &STLIMIT + &DUMP frame-by-frame replay
 │   ├── probe.py                # Shell tool: run any .sno N times at &STLIMIT=1..N
@@ -44,9 +44,9 @@ SNOBOL4-harness/
 
 **Lives here (harness):**
 - All oracle-facing tools: probe.py, crosscheck.sh, diff_monitor.py
-- The JVM harness/generator (migrated from SNOBOL4-jvm)
-- Probe and monitor test infrastructure (migrated from SNOBOL4-jvm)
-- Sprint oracle scripts (migrated from SNOBOL4-tiny)
+- The JVM harness/generator (migrated from snobol4jvm)
+- Probe and monitor test infrastructure (migrated from snobol4jvm)
+- Sprint oracle scripts (migrated from snobol4x)
 - Oracle build scripts and patches
 
 **Stays in each repo:**

@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(ROOT, 'src', 'ir'))
 from sno_parser import parse_source, parse_file
 from ir import Expr, PatExpr, Goto, Stmt, Program
 
-BEAUTY_RUN = os.path.abspath(os.path.join(ROOT, '..', 'SNOBOL4-corpus',
+BEAUTY_RUN = os.path.abspath(os.path.join(ROOT, '..', 'snobol4corpus',
                               'programs', 'beauty', 'beauty.sno'))
 
 passed = 0

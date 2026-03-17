@@ -1,5 +1,5 @@
 (ns SNOBOL4clojure.harness
-  "SNOBOL4-plus test harness — Sprint 14+18C.
+  "snobol4ever test harness — Sprint 14+18C.
 
    Unified interface for running SNOBOL4 programs through any oracle or engine.
 
@@ -53,7 +53,7 @@
    :jvm      {:type :in-process
               :role :target}
    :dotnet   {:bin  "dotnet"
-              :args ["run" "--project" "/home/claude/SNOBOL4-dotnet/Snobol4"]
+              :args ["run" "--project" "/home/claude/snobol4dotnet/Snobol4"]
               :type :subprocess
               :role :target}
    ;; :tiny — not yet a crosscheck target (Sprint 20 T_CAPTURE blocker)
