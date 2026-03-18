@@ -37,10 +37,33 @@ Serves three compiler/runtime repos:
 
 ## Status
 
-**Created 2026-03-11. Design phase. No code yet.**
+**Active — `net-benchmark-scaffold` sprint.**
 
-First sprint: migrate `harness.clj` from snobol4jvm, write thin engine wrappers
-(`run_dotnet.sh`, `run_tiny.sh`), write `crosscheck.sh`.
+| Component | Status |
+|-----------|--------|
+| `crosscheck/crosscheck.sh` — engine-agnostic corpus runner | ✅ session155 |
+| `adapters/dotnet/run.sh` — DOTNET calling convention | ✅ session155 |
+| `adapters/dotnet/run_crosscheck_dotnet.sh` — DOTNET-specific runner | ✅ session155 |
+| `adapters/tiny/run.sh` — TINY (snobol4x) calling convention | ✅ session156 |
+| `adapters/jvm/run.sh` — JVM (snobol4jvm) calling convention | ✅ session156 |
+| Oracle build scripts | Planned |
+| Benchmark grid (`bench.sh`) | Planned |
+| Three-oracle triangulation | Planned |
+
+### Quick start
+
+```bash
+# Run DOTNET against full corpus crosscheck
+CORPUS=$HOME/snobol4corpus/crosscheck \
+  bash crosscheck/crosscheck.sh --engine dotnet
+
+# Run DOTNET only (direct, faster)
+CORPUS=$HOME/snobol4corpus/crosscheck \
+  bash adapters/dotnet/run_crosscheck_dotnet.sh
+
+# Run all available engines
+bash crosscheck/crosscheck.sh
+```
 
 Full design: see `PLAN.md §7` in
 [snobol4ever/.github](https://github.com/snobol4ever/.github).

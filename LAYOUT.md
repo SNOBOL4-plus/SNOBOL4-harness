@@ -24,7 +24,9 @@ snobol4harness/
 │   │   │                       #   run-csnobol4-to-step, run-spitbol-to-step,
 │   │   │                       #   run-clojure-to-step, three-oracle triangulation
 │   │   └── generator.clj       # Worm generator — feeds programs to all three engines
-│   ├── dotnet/                 # (placeholder — crosscheck.sh TBD)
+│   ├── dotnet/
+│   │   ├── run.sh                    # Engine adapter — DOTNET calling convention (stderr swap)
+│   │   └── run_crosscheck_dotnet.sh  # DOTNET-specific crosscheck runner (direct, no adapter)
 │   └── tiny/
 │       ├── oracle_sprint14.py  # Sprint 14 parser oracle
 │       ├── oracle_sprint15.py  # Sprint 15 expression oracle
