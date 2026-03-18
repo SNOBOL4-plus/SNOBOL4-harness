@@ -6,10 +6,10 @@ Source: `x64-main.zip` (upload to `/mnt/user-data/uploads/`)
 
 ```bash
 apt-get install -y build-essential nasm
-unzip -q /mnt/user-data/uploads/x64-main.zip -d /home/claude/spitbol-src/
+unzip -q /mnt/user-data/uploads/x64-main.zip -d /home/socrates/spitbol-src/
 
 # Apply systm.c patch (nanoseconds → milliseconds)
-cat > /home/claude/spitbol-src/x64-main/osint/systm.c << 'PATCH'
+cat > /home/socrates/spitbol-src/x64-main/osint/systm.c << 'PATCH'
 #include "port.h"
 #include "time.h"
 int zystm() {
@@ -21,7 +21,7 @@ int zystm() {
 }
 PATCH
 
-cd /home/claude/spitbol-src/x64-main
+cd /home/socrates/spitbol-src/x64-main
 make
 cp sbl /usr/local/bin/spitbol
 # Binary: /usr/local/bin/spitbol

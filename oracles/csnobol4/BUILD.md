@@ -6,10 +6,10 @@ Source: `snobol4-2_3_3_tar.gz` (upload to `/mnt/user-data/uploads/`)
 
 ```bash
 apt-get install -y build-essential libgmp-dev m4
-mkdir -p /home/claude/csnobol4-src
+mkdir -p /home/socrates/csnobol4-src
 tar xzf /mnt/user-data/uploads/snobol4-2_3_3_tar.gz \
-    -C /home/claude/csnobol4-src/ --strip-components=1
-cd /home/claude/csnobol4-src
+    -C /home/socrates/csnobol4-src/ --strip-components=1
+cd /home/socrates/csnobol4-src
 
 # Apply STNO trace patch (required — see below)
 sed -i '/if (!chk_break(0))/{N;/goto L_INIT1;/d}' \

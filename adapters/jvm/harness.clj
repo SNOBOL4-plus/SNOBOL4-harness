@@ -53,7 +53,7 @@
    :jvm      {:type :in-process
               :role :target}
    :dotnet   {:bin  "dotnet"
-              :args ["run" "--project" "/home/claude/snobol4dotnet/Snobol4"]
+              :args ["run" "--project" "/home/socrates/snobol4dotnet/Snobol4"]
               :type :subprocess
               :role :target}
    ;; :tiny — not yet a crosscheck target (Sprint 20 T_CAPTURE blocker)
