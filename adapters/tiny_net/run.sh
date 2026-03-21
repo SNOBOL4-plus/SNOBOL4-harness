@@ -37,6 +37,16 @@ fi
 
 mkdir -p "$NET_CACHE"
 
+# Copy runtime DLLs into cache dir so mono finds them alongside .exe files
+RUNTIME_NET="$TINY_REPO/src/runtime/net"
+for dll in snobol4lib.dll snobol4run.dll; do
+    src="$RUNTIME_NET/$dll"
+    dst="$NET_CACHE/$dll"
+    if [[ -f "$src" ]] && { [[ ! -f "$dst" ]] || ! diff -q "$src" "$dst" >/dev/null 2>&1; }; then
+        cp "$src" "$dst"
+    fi
+done
+
 # Derive a stable cache key from the canonical path
 base="$(basename "$SNO_FILE" .sno)"
 dir_hash="$(echo "$SNO_FILE" | md5sum | cut -c1-8)"
