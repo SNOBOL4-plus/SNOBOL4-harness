@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 # snobol4harness/adapters/tiny/run.sh
-# Run a .sno file through TINY (snobol4x) engine and emit program stdout only.
+# Run a .sno file through TINY (one4all) engine and emit program stdout only.
 # Usage: run.sh <file.sno> [< input]
 # Calling convention: stdin → program stdin, stdout → program output.
 #
-# Requires: snobol4x built; TINY_REPO env var or default $HOME/snobol4x.
+# Requires: one4all built; TINY_REPO env var or default $HOME/one4all.
 set -euo pipefail
 SNO_FILE="$1"
-TINY_REPO="${TINY_REPO:-$HOME/snobol4x}"
-TINY_BIN="$TINY_REPO/src/sno2c/sno2c"
+TINY_REPO="${TINY_REPO:-$HOME/one4all}"
+TINY_BIN="$TINY_REPO/src/scrip-cc/scrip-cc"
 
 if [[ ! -x "$TINY_BIN" ]]; then
-    echo "SKIP: sno2c not found at $TINY_BIN" >&2
+    echo "SKIP: scrip-cc not found at $TINY_BIN" >&2
     exit 2
 fi
 
-# sno2c C backend: compile to temp binary, run it
+# scrip-cc C backend: compile to temp binary, run it
 TMPDIR_RUN=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_RUN"' EXIT
 CFILE="$TMPDIR_RUN/prog.c"

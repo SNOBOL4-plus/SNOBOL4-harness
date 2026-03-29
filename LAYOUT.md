@@ -48,7 +48,7 @@ snobol4harness/
 - All oracle-facing tools: probe.py, crosscheck.sh, diff_monitor.py
 - The JVM harness/generator (migrated from snobol4jvm)
 - Probe and monitor test infrastructure (migrated from snobol4jvm)
-- Sprint oracle scripts (migrated from snobol4x)
+- Sprint oracle scripts (migrated from one4all)
 - Oracle build scripts and patches
 
 **Stays in each repo:**

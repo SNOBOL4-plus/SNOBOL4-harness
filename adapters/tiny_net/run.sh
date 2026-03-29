@@ -1,32 +1,32 @@
 #!/usr/bin/env bash
 # snobol4harness/adapters/tiny_net/run.sh
-# Run a .sno file through TINY NET (snobol4x -net) engine and emit stdout only.
+# Run a .sno file through TINY NET (one4all -net) engine and emit stdout only.
 #
 # Usage: run.sh <file.sno> [< input]
 # Calling convention: stdin → program stdin, stdout → program output.
 #
-# Pipeline: sno2c -net → ilasm → mono
+# Pipeline: scrip-cc -net → ilasm → mono
 #
 # CACHING: ilasm is slow (~350ms). We cache the .exe by md5 of the .il so
 # repeat runs of unchanged programs skip ilasm entirely.
 #
-# Requires: snobol4x built (sno2c binary), ilasm, mono.
+# Requires: one4all built (scrip-cc binary), ilasm, mono.
 # Env overrides:
-#   TINY_REPO  — path to snobol4x checkout  (default: $HOME/snobol4x)
-#   NET_CACHE  — cache dir for .il/.exe      (default: /tmp/snobol4x_net_cache)
+#   TINY_REPO  — path to one4all checkout  (default: $HOME/one4all)
+#   NET_CACHE  — cache dir for .il/.exe      (default: /tmp/one4all_net_cache)
 
 set -uo pipefail
 
 SNO_FILE="${1:-}"
 [ -z "$SNO_FILE" ] && { echo "Usage: run.sh <file.sno>" >&2; exit 2; }
 
-TINY_REPO="${TINY_REPO:-$HOME/snobol4x}"
-SNO2C="$TINY_REPO/sno2c"
-NET_CACHE="${NET_CACHE:-/tmp/snobol4x_net_cache}"
+TINY_REPO="${TINY_REPO:-$HOME/one4all}"
+SNO2C="$TINY_REPO/scrip-cc"
+NET_CACHE="${NET_CACHE:-/tmp/one4all_net_cache}"
 
 # Validate toolchain
 if [[ ! -x "$SNO2C" ]]; then
-    echo "SKIP: sno2c not found at $SNO2C" >&2; exit 2
+    echo "SKIP: scrip-cc not found at $SNO2C" >&2; exit 2
 fi
 if ! command -v ilasm >/dev/null 2>&1; then
     echo "SKIP: ilasm not found" >&2; exit 2

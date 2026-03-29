@@ -10,7 +10,7 @@ Serves three compiler/runtime repos:
 |------|------|
 | [snobol4dotnet](https://github.com/snobol4ever/snobol4dotnet) | Full SNOBOL4/SPITBOL → .NET/MSIL |
 | [snobol4jvm](https://github.com/snobol4ever/snobol4jvm) | Full SNOBOL4/SPITBOL → JVM bytecode |
-| [snobol4x](https://github.com/snobol4ever/snobol4x) | Native compiler → x86-64 ASM |
+| [one4all](https://github.com/snobol4ever/one4all) | Native compiler → x86-64 ASM |
 
 ## What Goes Here
 
@@ -44,7 +44,7 @@ Serves three compiler/runtime repos:
 | `crosscheck/crosscheck.sh` — engine-agnostic corpus runner | ✅ session155 |
 | `adapters/dotnet/run.sh` — DOTNET calling convention | ✅ session155 |
 | `adapters/dotnet/run_crosscheck_dotnet.sh` — DOTNET-specific runner | ✅ session155 |
-| `adapters/tiny/run.sh` — TINY (snobol4x) calling convention | ✅ session156 |
+| `adapters/tiny/run.sh` — TINY (one4all) calling convention | ✅ session156 |
 | `adapters/jvm/run.sh` — JVM (snobol4jvm) calling convention | ✅ session156 |
 | Oracle build scripts | Planned |
 | Benchmark grid (`bench.sh`) | Planned |
