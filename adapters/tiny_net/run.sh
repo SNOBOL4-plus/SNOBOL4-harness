@@ -21,12 +21,12 @@ SNO_FILE="${1:-}"
 [ -z "$SNO_FILE" ] && { echo "Usage: run.sh <file.sno>" >&2; exit 2; }
 
 TINY_REPO="${TINY_REPO:-$HOME/one4all}"
-SNO2C="$TINY_REPO/scrip-cc"
+SCRIP_CC="$TINY_REPO/scrip-cc"
 NET_CACHE="${NET_CACHE:-/tmp/one4all_net_cache}"
 
 # Validate toolchain
-if [[ ! -x "$SNO2C" ]]; then
-    echo "SKIP: scrip-cc not found at $SNO2C" >&2; exit 2
+if [[ ! -x "$SCRIP_CC" ]]; then
+    echo "SKIP: scrip-cc not found at $SCRIP_CC" >&2; exit 2
 fi
 if ! command -v ilasm >/dev/null 2>&1; then
     echo "SKIP: ilasm not found" >&2; exit 2
@@ -56,7 +56,7 @@ exe="$NET_CACHE/${key}.exe"
 stamp="$NET_CACHE/${key}.stamp"
 
 # Emit .il (fast — ~1ms)
-"$SNO2C" -net "$SNO_FILE" > "$il" 2>/dev/null
+"$SCRIP_CC" -net "$SNO_FILE" > "$il" 2>/dev/null
 
 # Assemble .exe only if .il changed (slow — ~350ms)
 il_md5="$(md5sum "$il" | cut -d' ' -f1)"
